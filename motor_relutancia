@@ -1,0 +1,307 @@
+# Propriedades
+#     5 coeficientes de Fourier
+#     1 defasagem
+#     1 amplitude de corrente
+#     1 lista de angulos
+#     1 lista de torques
+# Metodos
+#     sincrono
+
+
+import random
+import numpy as np
+
+
+import femm
+
+import math
+
+def forma(a1,a2,a3,a4,a5,defa,arg):
+    return a1*math.sin(arg+defa)+a2*math.sin(2*(arg+defa))+a3*math.sin(3*(arg+defa))+a4*math.sin(4*(arg+defa))+a5*math.sin(5*(arg+defa))
+
+class MotorRel:
+
+    def __init__(self):
+        self.t = np.linspace(0, 100, 1000) # 10 números, de 0 a 1;
+        self.w= 60 # mesma frequencia
+        self.A1=np.random.uniform(0,1.01);
+        self.A2=np.random.uniform(0,1.01);
+        self.A3=np.random.uniform(0,1.01);
+        self.A4=np.random.uniform(0,1.01);
+        self.A5=np.random.uniform(0,1.01);
+        self.amplitude=10;
+        self.angulos=[];
+        self.torques=[]; 
+        self.correntes=[]
+        self.defasagem=math.pi/16 -math.pi/8;
+
+    def sincrono(self):
+        # =============================================================================
+        # Abre o simulador FEMM
+        # =============================================================================
+        femm.openfemm();     
+        femm.create(0);  #Cria arquivo novo de simulacao magnetica
+        femm.mi_probdef(0,'millimeters','planar', 1e-9, 44.5, 30, (0));  #mi probdef(freq,units,type,precision,depth,minangle,(acsolver))
+        femm.mi_smartmesh(1);
+        # =============================================================================
+        # Estator - parametros
+        # =============================================================================
+        num_slots = 24;
+        #sequencia = {1, 2, 2, 3, 3,-1,-1, -2, -2, -3, -3, 1, 1, 2, 2, 3, 3,-1,-1, -2, -2, -3, -3, 1};
+        # Nessa sequencia, o numero representa qual fase esta ligada 
+        sequencia = [1, 1,-2,-2,3,3 ,-1 ,-1,2 ,2 ,-3, -3, 1, 1,-2,-2,3,3 ,-1 ,-1,2 ,2 ,-3, -3];
+        #sequencia = [1, -2,3,-2,3,3 ,-1 ,-1,2 ,2 ,-3, -3, 1, 1,-2,-2,3,3 ,-1 ,-1,2 ,2 ,-3, -3];
+
+        #polos	= 2;
+        raio = 95/2;
+        raio_int = 57/2;
+        ab_slot = 0.25; #proporcional `a largura total do slot
+        fundo_slot = 0.65; #proporcional
+        frente_slot= 0.65; #proporcional
+        prof_abert =0.1; #proporcional
+        prof_fim_slot=0.8; 
+        gap=0.5;
+        ang_max=30;
+        
+         # =============================================================================
+        # #Rotor - parametros
+        # =============================================================================
+        #condutores = 30;
+        #eixo = 16;
+        
+        
+        #defasagem = math.pi/32;
+        #defasagem = -math.pi/16;
+        #defasagem = math.pi/16 -math.pi/8;
+        
+        # =============================================================================
+        #  Interface
+        # =============================================================================
+        #femm.mi_addboundprop('boundry',O,O,O,O,O,O,O,O,O);# creat a newboundary'Dirichlet'
+        femm.mi_addnode( 0,1*raio);
+        femm.mi_addnode(0,-1*raio);
+        femm.mi_addarc(0,1*raio,0,-1*raio,180,20);
+        femm.mi_addarc(0,-1*raio,0,1*raio,180,20);
+        
+        femm.mi_selectarcsegment(raio,0);
+        femm.mi_selectarcsegment(-raio,0);
+        femm.mi_setsegmentprop('boundry', 1, 1, 1, 1);
+        femm.mi_clearselected();
+        
+        
+        
+        
+        # =============================================================================
+        # Desenho do slot padrao
+        # =============================================================================
+        
+        # Inicio da abertura
+        ang=2*3.14/num_slots
+        
+        ponto2x = raio_int*math.cos((1-ab_slot)*ang/2);
+        ponto2y = raio_int*math.sin((1-ab_slot)*ang/2);
+        ponto3x = raio_int*math.cos((1-ab_slot)*ang/2+ab_slot*ang);
+        ponto3y = raio_int*math.sin((1-ab_slot)*ang/2+ab_slot*ang);
+        
+        femm.mi_addnode(ponto2y,ponto2x);
+        femm.mi_addnode(ponto3y,ponto3x);
+        
+        femm.mi_addarc(ponto2y, ponto2x,ponto3y,ponto3x,(ab_slot)*ang,20)
+        
+        # fim da abertura
+        raio_abert=(raio-raio_int)*prof_abert +raio_int;
+        altura4 = raio_abert*math.cos((1-ab_slot)*ang/2);
+        dist4 = raio_abert*math.sin((1-ab_slot)*ang/2);
+        femm.mi_addnode(dist4, altura4);
+        femm.mi_addsegment(ponto2y, ponto2x,dist4, altura4);
+        altura5 = raio_abert*math.cos((1-ab_slot)*ang/2+ab_slot*ang);
+        dist5 = raio_abert*math.sin((1-ab_slot)*ang/2+ab_slot*ang);
+        femm.mi_addnode(dist5, altura5);
+        femm.mi_addsegment(dist5, altura5,ponto3y, ponto3x);
+        
+        # inicio slot
+        raio_abert=2*(raio-raio_int)*prof_abert +raio_int;
+        altura7 = raio_abert*math.cos((1-frente_slot)*ang/2);
+        dist7 = raio_abert*math.sin((1-frente_slot)*ang/2);
+        femm.mi_addnode(dist7, altura7);
+        femm.mi_addsegment(dist7, altura7,dist4, altura4);
+        altura6 = raio_abert*math.cos((1-frente_slot)*ang/2+frente_slot*ang);
+        dist6 = raio_abert*math.sin((1-frente_slot)*ang/2+frente_slot*ang);
+        femm.mi_addnode(dist6, altura6);
+        femm.mi_addsegment(dist5, altura5,dist6, altura7);
+        # final slot
+        raio_abert=(raio-raio_int)*prof_fim_slot +raio_int;
+        altura = raio_abert*math.cos((1-fundo_slot)*ang/2);
+        dist = raio_abert*math.sin((1-fundo_slot)*ang/2);
+        femm.mi_addnode(dist, altura);
+        femm.mi_addsegment(dist, altura,dist7, altura6);
+        altura8 = raio_abert*math.cos((1-fundo_slot)*ang/2+frente_slot*ang);
+        dist8 = raio_abert*math.sin((1-fundo_slot)*ang/2+frente_slot*ang);
+        femm.mi_addnode(dist8, altura8);
+        femm.mi_addsegment(dist8, altura8,dist6, altura6);
+        femm.mi_addarc(dist8, altura8,dist,altura,360/num_slots,20)
+        
+        
+        femm.mi_selectrectangle(0,0,raio,raio,4)
+        femm.mi_setgroup(8);
+        femm.mi_selectgroup(8);
+        femm.mi_copyrotate(0, 0, 360/num_slots, num_slots);
+        femm.mi_clearselected();
+        
+        # =============================================================================
+        # estator
+        # =============================================================================
+        
+        femm.mi_addnode(0, -raio );
+        femm.mi_addnode(0, raio );
+        femm.mi_addarc(0, -raio,0,raio,180,20);
+        femm.mi_addarc(0, raio,0,-raio,180,20);
+        femm.mi_addnode(0, -raio_int );
+        femm.mi_addnode(0, raio_int );
+        femm.mi_addarc(0, -raio_int ,0,raio_int,180,20);
+        femm.mi_addarc(0, raio_int ,0,-raio_int,180,20);
+        
+        # =============================================================================
+        #  rotor
+        # =============================================================================
+        
+        femm.mi_addnode(0, -raio_int +gap);
+        femm.mi_addnode(0, raio_int -gap);
+        femm.mi_addarc(0, -raio_int +gap,0,raio_int-gap,180,20);
+        femm.mi_addarc(0, raio_int -gap,0,-raio_int+gap,180,20);
+        
+        
+        # =============================================================================
+        # # fluxbarrier
+        # =============================================================================
+        
+        # # faz a primeira barreira interna
+        # raio_fluxo=raio_int-4*gap;
+        # pontof1x = raio_fluxo*math.sin((1-ab_slot)*ang/2);
+        # pontof1y = raio_fluxo*math.cos((1-ab_slot)*ang/2);
+        # pontof3x = raio_fluxo*math.sin((3.14/2)-((1-ab_slot)*ang/2));
+        # pontof3y = raio_fluxo*math.cos((3.14/2)-((1-ab_slot)*ang/2));
+        # femm.mi_addnode(pontof1x,pontof1y);
+        # femm.mi_addnode(pontof3x,pontof3y);
+        # femm.mi_addarc(pontof1x,pontof1y,pontof3x,pontof3y,100,20);
+        # pontof2x = raio_fluxo*math.sin((1+ab_slot)*ang/2);
+        # pontof2y = raio_fluxo*math.cos((1+ab_slot)*ang/2);
+        # pontof4x = raio_fluxo*math.sin((3.14/2)-((1+1*ab_slot)*ang/2));
+        # pontof4y = raio_fluxo*math.cos((3.14/2)-((1+1*ab_slot)*ang/2));
+        # femm.mi_addnode(pontof2x,pontof2y);
+        # femm.mi_addnode(pontof4x,pontof4y);
+        # femm.mi_addarc(pontof2x,pontof2y,pontof1x,pontof1y,180,20);
+        # femm.mi_addarc(pontof3x,pontof3y,pontof4x,pontof4y,180,20);
+        # femm.mi_addarc(pontof2x,pontof2y,pontof4x,pontof4y,100,20);
+        
+        # faz a primeira barreira externa
+        
+        pontof1x = (raio_int-gap)*math.sin(math.pi/4);
+        pontof1y = (raio_int-gap)*math.cos(math.pi/4);
+        pontof3x = (raio_int-gap);
+        pontof3y = 0;
+        femm.mi_addnode(pontof1x,pontof1y);
+        femm.mi_addnode(pontof3x,pontof3y);
+        femm.mi_addarc(pontof1x,pontof1y,pontof3x,pontof3y,120,20);
+        # pontof2x = raio_fluxo*math.sin((1+ab_slot)*ang/2);
+        # pontof2y = raio_fluxo*math.cos((1+ab_slot)*ang/2);
+        # pontof4x = raio_fluxo*math.sin((3.14/2)-((1+1*ab_slot)*ang/2));
+        # pontof4y = raio_fluxo*math.cos((3.14/2)-((1+1*ab_slot)*ang/2));
+        # femm.mi_addnode(pontof2x,pontof2y);
+        # femm.mi_addnode(pontof4x,pontof4y);
+        # femm.mi_addarc(pontof2x,pontof2y,pontof1x,pontof1y,180,20);
+        # femm.mi_addarc(pontof3x,pontof3y,pontof4x,pontof4y,180,20);
+        # femm.mi_addarc(pontof2x,pontof2y,pontof4x,pontof4y,100,20);
+        
+        
+        
+        
+        
+        
+        # - replica fluxbarrier
+        femm.mi_selectcircle(0,0,raio_int+gap/2,4) 
+        femm.mi_copyrotate(0,0,90,3);
+        
+        # =============================================================================
+        # materiais
+        # =============================================================================
+        
+        femm.mi_addmaterial('Ar',1,1,0);
+        femm.mi_addmaterial('bobina',1,1,0);
+        femm.mi_addmaterial('Nucleo',55000,55000,0);
+        
+        
+        femm.mi_addcircprop('C1',10,1);
+        femm.mi_addcircprop('C2',10,1);
+        femm.mi_addcircprop('C3',10,1);
+        
+        
+        femm.mi_addblocklabel(0,(raio+raio_int)/2);  #  estator
+        femm.mi_selectlabel(0,(raio+raio_int)/2);
+        femm.mi_setblockprop('Nucleo',0,1,'<None>',0,0,0);
+        femm.mi_clearselected();
+        femm.mi_addblocklabel(0,0);  #  rotor
+        femm.mi_selectlabel(0,0);
+        femm.mi_setblockprop('Nucleo',0,1,'<None>',0,0,0);
+        femm.mi_clearselected();
+        
+        #  material fluxbarrier
+        femm.mi_addblocklabel((pontof1x+pontof3x)/2,(pontof1y+pontof3y)/2);  #  barreira rotor
+        femm.mi_selectlabel((pontof1x+pontof3x)/2,(pontof1y+pontof3y)/2);
+        femm.mi_setblockprop('Ar',0,1,'<None>',0,0,0);
+        femm.mi_copyrotate(0,0,90,3);
+        femm.mi_clearselected();
+        
+        
+        # femm.mi_addblocklabel(0,raio*1.1);  #  ar externo
+        # femm.mi_selectlabel(raio,raio);
+        # femm.mi_setblockprop('Ar',0,1,'<None>',0,0,0);
+        
+        # femm.mi_clearselected();
+        femm.mi_addblocklabel(0,raio_int-0.5*gap);  #  ar interno
+        femm.mi_selectlabel(0,raio_int-0.5*gap);
+        femm.mi_setblockprop('Ar',0,1,'<None>',0,0,0);
+        femm.mi_clearselected();
+
+        # =============================================================================
+        # Calcula para varios angulos 
+        # =============================================================================
+        num_ang=1; # numero de amostras por grau
+       
+        for i in range(0,ang_max*num_ang,1):
+            angulo=(i*math.pi/(180*num_ang))+self.defasagem;
+
+            print('Ângulo = ',angulo*180/math.pi-180*self.defasagem/math.pi);
+         # Atribui as correntes aos slots
+            corrente=[];
+            for j in range(0,num_slots):
+                altura = (raio_int*(prof_abert+1))*math.cos(2*3.14*(j-0.5)/num_slots);
+                dist = (raio_int*(prof_abert+1))*math.sin(2*3.14*(j-0.5)/num_slots);
+                femm.mi_addblocklabel(dist,altura);
+                femm.mi_selectlabel(dist,altura);
+                ang=((2*3.1416/3)*(abs(sequencia[j])-1)+(3.1416/2)*(1+(abs(sequencia[j])/(sequencia[j]))));
+                #print(ang)
+                #femm.mi_setblockprop('bobina',0,1,'C' + str(abs(sequencia[j])),0,0,10*math.sin(ang-2*angulo));
+                femm.mi_setblockprop('bobina',0,1,'C' + str(abs(sequencia[j])),0,0,self.amplitude*forma(self.A1,self.A2,self.A3,self.A4,self.A5,ang-2*angulo, self.defasagem));
+                corrente.append(self.amplitude*forma(self.A1,self.A2,self.A3,self.A4,self.A5,ang-2*angulo, self.defasagem))
+         
+            #print('bobina',0,1,'C' + str(abs(sequencia[j])),0,0,10*math.sin(ang+angulo));
+                femm.mi_clearselected();
+        
+        # Salva e analiza
+            self.correntes.append(corrente);
+            femm.mi_saveas('ripple' + str(i) + '.fem');      
+            femm.mi_analyze(0);
+            femm.mi_loadsolution()
+            #femm.mi_selectcircle(0,0,raio_int-gap/2,4)
+            femm.mo_selectblock(0,0)
+            ft=femm.mo_blockintegral(22)
+            print('Torque = ',ft);
+            self.angulos.append(angulo*180/math.pi-180*self.defasagem/math.pi)
+            self.torques.append(ft)
+           
+        # Roda rotor
+            femm.mi_selectcircle(0,0,raio_int-gap/2,4)
+            femm.mi_moverotate(0,0,(1/num_ang))
+            femm.mi_clearselected()
+        femm.closefemm()
